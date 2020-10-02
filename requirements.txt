@@ -1,1 +1,7 @@
 bibtexparser
+pyperclip
+requests
+textrank4zh
+nltk
+summa
+pytoml
