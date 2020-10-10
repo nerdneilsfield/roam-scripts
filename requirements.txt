@@ -2,6 +2,16 @@ bibtexparser
 pyperclip
 requests
 textrank4zh
-nltk
+jieba
+numpy
+scipy
+# nltk
 summa
 pytoml
+
+#format
+autopep8
+
+#translator
+googletrans
+tencentcloud_sdk_python

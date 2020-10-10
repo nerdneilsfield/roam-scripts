@@ -6,16 +6,15 @@ import urllib.parse
 import urllib.request
 
 import bibtexparser as bp
-import nltk
-import pytoml
 import pyperclip as pc
+import pytoml
 from summa import keywords, summarizer
 from textrank4zh import TextRank4Keyword, TextRank4Sentence
 
-FOR_TEST = True
+from translator import GoogleTranslator
 
+FOR_TEST = False
 
-caiyun_token = "3975l6lr5pcbvidl6jl2"
 
 def get_english_summary(text):
     summary = summarizer.summarize(text)
@@ -64,45 +63,8 @@ def get_chinese_keywords(text):
     return keywords_, keyphrases
 
 
-def caiyun_translate(source):
-    """Use CaiYun Translator's  API to translate the abstract
-
-    Args:
-        content (str): The content of abstract
-    """
-
-    url = "http://api.interpreter.caiyunai.com/v1/translator"
-    direction = "auto2zh"
-
-    # WARNING, this token is a test token for new developers, and it should be replaced by your token
-
-
-    payload = {
-        "source": source,
-        "trans_type": direction,
-        "request_id": "demo",
-        "detect": True,
-    }
-
-    headers = {
-        'content-type': "application/json",
-        'x-authorization': "token " + caiyun_token,
-    }
-
-    response_data = ""
-    req = urllib.request.Request(
-        "https://api.interpreter.caiyunai.com/v1/translator")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("x-authorization", "token " + caiyun_token)
-
-    with urllib.request.urlopen(req, data=json.dumps(payload).encode("utf-8")) as f:
-        read_data = f.read()
-        response_data = read_data.decode('unicode_escape')
-
-    return json.loads(response_data)['target']
-
-
 def parse_content(content):
+    global translator
     """Parse the bibtext and translate the abstract
 
     Args:
@@ -118,7 +80,7 @@ def parse_content(content):
             new_entry["author"] = entry["author"].split(" and ")
         if "abstractnote" in entry.keys():
             new_entry["abstractnote"] = entry["abstractnote"].replace("\n", "")
-            new_entry["abstractnote_cn"] = caiyun_translate(
+            new_entry["abstractnote_cn"] = translator.translate(
                 entry["abstractnote"])
             english_summary = get_english_summary(new_entry["abstractnote"])
             chinese_summary = get_chinese_summary(new_entry["abstractnote_cn"])
@@ -130,6 +92,7 @@ def parse_content(content):
             new_entry["chinese_keyphrase"] = chinese_keyphrase
         # if "doi" in entry.keys():
         #     result.append(new_entry)
+        result.append(new_entry)
 
     return result
 
@@ -144,37 +107,39 @@ def generate_metadata(entries):
         for key in entry.keys():
             if key != "ID" and key != "title":
                 if key == "journal":
-                    result.append(f"\t\t{key}: [[{entry[key]}]]")
+                    result.append(f"\t\t**{key}**: [[{entry[key]}]]")
                 elif key == "author":
                     result.append(
-                        f"\t\t{key}: {','.join(['[[' + i + ']]' for i in entry[key]])}")
+                        f"\t\t**{key}**: {','.join(['[[' + i + ']]' for i in entry[key]])}")
                 elif key == "chinese_keywords":
-                    result.append(f"\t\t{key}:")
+                    result.append(f"\t\t**{key}**:")
                     for keywords_ in entry["chinese_keywords"]:
                         result.append(f"\t\t\t{keywords_}")
                 elif key == "chinese_keyphrase":
-                    result.append(f"\t\t{key}:")
+                    result.append(f"\t\t**{key}**:")
                     for keywords_ in entry["chinese_keyphrase"]:
                         result.append(f"\t\t\t{keywords_}")
                 elif key == "english_summary":
-                    result.append(f"\t\t{key}:")
+                    result.append(f"\t\t**{key}**:")
                     for summary in entry["english_summary"]:
                         result.append(f"\t\t\t{summary}")
                 elif key == "chinese_summary":
-                    result.append(f"\t\t{key}:")
+                    result.append(f"\t\t**{key}**:")
                     for summary in entry["chinese_summary"]:
                         result.append(f"\t\t\t{summary}")
                 elif key == "doi":
-                    doi_websites = "https:/doi.org/" +  entry["doi"]
-                    result.append(f"\t\t{key}:[{entry['doi']}]({doi_websites})")
+                    doi_websites = "https:/doi.org/" + entry["doi"]
+                    result.append(
+                        f"\t\t**{key}**:[{entry['doi']}]({doi_websites})")
                 else:
-                    result.append(f"\t\t{key}: {entry[key]}")
+                    result.append(f"\t\t**{key}**: {entry[key]}")
     return "\n".join(result)
 
 
 if __name__ == '__main__':
-    config = pytoml.load(open("config.toml", "r"))
-    caiyun_token = config["caiyun_token"]
+    # config = pytoml.load(open("config.toml", "r"))
+    # caiyun_token = config["caiyun_token"]
+    translator = GoogleTranslator()
     if FOR_TEST:
         print("中文测试")
         clip_content = open("test.bib", 'r').read()
@@ -185,6 +150,9 @@ if __name__ == '__main__':
         print(result)
     else:
         clip_content = pc.paste()
+        print(f"copy {len(clip_content)} bytes data from clipboard")
         entries = parse_content(clip_content)
+        # print(len(entries))
         result = generate_metadata(entries)
         pc.copy(result)
+        print(f"copy {len(result)} bytes data to clipboard")
